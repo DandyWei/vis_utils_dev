@@ -1,64 +1,96 @@
-# 重新加载必要的库
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.patches import Rectangle
-import mplfinance as mpf
 import numpy as np
-# 重新读取用户上传的 K 线数据文件
-file_path_kline = "D:/code/vis/data/EURUSDx_M15_202204010000_202409240645.csv"
+
+# 1. 讀取 K 線數據文件
+file_path_kline = "./data/EURUSDx_M15_202204010000_202409240645.csv"
 df_kline = pd.read_csv(file_path_kline, sep="\t")
 
-# df_kline.columns
-# 解析时间字段
-df_kline['datetime'] = pd.to_datetime(
-    df_kline['<DATE>'] + ' ' + df_kline['<TIME>'])
+# 檢查文件是否成功讀取
+if df_kline.empty:
+    raise ValueError("CSV 文件為空，請檢查檔案內容是否正確")
+
+# 列印資料內容
+#print(df_kline.head())
+#print(df_kline.columns)
+
+# 2. 新增 'f_signals' 欄位
+np.random.seed(42)  # 固定隨機種子以便結果可重現
+df_kline['f_signals'] = np.random.randint(-2, 4, size=len(df_kline))
+
+# 列印新增後的資料框確認
+#print(df_kline.head())
+
+# 3. 解析時間字段
+df_kline['datetime'] = pd.to_datetime(df_kline['<DATE>'] + ' ' + df_kline['<TIME>'])
 df_kline.set_index('datetime', inplace=True)
 
-# 选择需要的列，并转换为浮点数
-ohlc_df = df_kline[['<OPEN>', '<HIGH>',
-                    '<LOW>', '<CLOSE>']].astype(float).copy()
+# 4. 確保列名存在於資料框中
+required_columns = ['<OPEN>', '<HIGH>', '<LOW>', '<CLOSE>', 'f_signals']
+for col in required_columns:
+    if col not in df_kline.columns:
+        raise KeyError(f"資料框中缺少必要的列：{col}")
 
-# 仅绘制最近 500 根 K 线
+# 列印確認所有必要欄位
+#print("資料框的所有欄位：", df_kline.columns)
+
+# 5. 選擇需要的列
+ohlc_df = df_kline[['<OPEN>', '<HIGH>', '<LOW>', '<CLOSE>', 'f_signals']].astype(float)
+
+# 僅繪製最近 500 根 K 線
 ohlc_df = ohlc_df.iloc[-500:]
 
-# 设置绘图
+# 6. 繪製 K 線圖
 fig, ax = plt.subplots(figsize=(12, 6))
 
-# 颜色设置
-color_up = 'green'   # 收盘价高于开盘价（上涨K线）
-color_down = 'red'   # 收盘价低于开盘价（下跌K线）
+# 設置顏色
+color_up = 'green'
+color_down = 'red'
 
-# 绘制K线
+# 固定標記符號的偏移距離
+offset = 0.0005
+
+# 繪製 K 線
 for idx, row in ohlc_df.iterrows():
-    date = row.name  # datetime 索引
+    date = row.name
     open_price = row['<OPEN>']
     high_price = row['<HIGH>']
     low_price = row['<LOW>']
     close_price = row['<CLOSE>']
-
-    # 颜色判断
+    signal = row['f_signals']
+    
+    # 設置顏色
     color = color_up if close_price >= open_price else color_down
-
-    # 画K线的影线（高低价格）
+   
+    # 繪製影線
     ax.plot([date, date], [low_price, high_price], color='black', linewidth=1)
-
-    # 画K线的实体（开盘价-收盘价）
+    
+    # 繪製實體
     rect = Rectangle((mdates.date2num(date) - 0.003, min(open_price, close_price)),
-                     0.006, abs(close_price - open_price),
+                     0.006, abs(open_price - close_price),
                      facecolor=color, edgecolor='black')
     ax.add_patch(rect)
+    
+    # 根據 f_signals 加入標記
+    if signal > 0:
+        ax.text(mdates.date2num(date), low_price - offset,
+                "^", color='blue', fontsize=10, ha='center', va='center', fontweight='bold')
+    elif signal < 0:
+        ax.text(mdates.date2num(date), high_price + offset,
+                "v", color='red', fontsize=10, ha='center', va='center', fontweight='bold')
 
-# 设置时间格式
+# 設置時間格式
 ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
 ax.xaxis.set_major_locator(mdates.HourLocator(interval=6))
 plt.xticks(rotation=45)
 
-# 添加标题和标签
+# 添加標題和標籤
 ax.set_title("EUR/USD 15-Minute K-Line Chart (Last 500 Candles)")
 ax.set_xlabel("Time")
 ax.set_ylabel("Price")
 
-# 显示图表
+# 顯示圖表
 plt.grid()
 plt.show()
